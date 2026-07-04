@@ -1,0 +1,16 @@
+# Dados sintéticos gerados (podem ser recriados pelo notebook)
+dataset/*.json
+dataset/*.jsonl
+dataset/*.csv
+
+# Python
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Ambiente
+.env
+.venv/
+
+# Docker
+docker/volumes/

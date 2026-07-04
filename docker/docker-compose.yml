@@ -1,0 +1,130 @@
+version: '3.8'
+
+services:
+  mongo1:
+    image: mongo:6.0
+    container_name: mongo1
+    command: mongod --replSet rs0 --bind_ip_all
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo1_data:/data/db
+    networks:
+      - mongo-net
+    # unless-stopped não interfere no Teste 3: um "docker stop" manual deixa o
+    # container parado mesmo com essa política (ela só evita que ele fique
+    # parado sem querer depois de um reboot da máquina host).
+    restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  mongo2:
+    image: mongo:6.0
+    container_name: mongo2
+    command: mongod --replSet rs0 --bind_ip_all
+    ports:
+      - "27018:27017"
+    volumes:
+      - mongo2_data:/data/db
+    networks:
+      - mongo-net
+    restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  mongo3:
+    image: mongo:6.0
+    container_name: mongo3
+    command: mongod --replSet rs0 --bind_ip_all
+    ports:
+      - "27019:27017"
+    volumes:
+      - mongo3_data:/data/db
+    networks:
+      - mongo-net
+    restart: unless-stopped
+    healthcheck:
+      test: echo 'db.runCommand("ping").ok' | mongosh --quiet
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Serviço opcional: inicia o replica set automaticamente (rs.initiate) na
+  # primeira vez que os 3 nós sobem, para o grupo não precisar digitar o
+  # comando manualmente toda vez que recriar os volumes. É idempotente: se o
+  # replica set já foi iniciado, o script apenas avisa e sai sem erro.
+  # O procedimento manual do Alek (entrar via mongosh e rodar rs.initiate)
+  # continua funcionando normalmente e é o que vale para a demonstração —
+  # este serviço só existe pra poupar digitação durante o desenvolvimento.
+  mongo-init:
+    image: mongo:6.0
+    container_name: mongo-init
+    depends_on:
+      mongo1:
+        condition: service_healthy
+      mongo2:
+        condition: service_healthy
+      mongo3:
+        condition: service_healthy
+    networks:
+      - mongo-net
+    restart: "no"
+    volumes:
+      - ./mongo-init.js:/mongo-init.js:ro
+    entrypoint: >
+      mongosh --host mongo1:27017 --quiet /mongo-init.js
+
+  # App Streamlit na MESMA rede Docker dos nós do Mongo — isso é o que evita
+  # o problema de resolução de hostname (mongo2/mongo3) descrito no diagrama.
+  app:
+    build:
+      context: ../scripts
+      dockerfile: Dockerfile
+    container_name: eventos-app
+    depends_on:
+      - mongo-init
+    environment:
+      # Lista os 3 hosts pelo nome INTERNO do Docker — funciona porque o app
+      # está na mesma rede (mongo-net), então "mongo1", "mongo2" e "mongo3"
+      # resolvem normalmente via DNS interno do Docker Compose.
+      MONGO_URI: "mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=rs0"
+      MONGO_DB: "eventos_urbanos"
+    ports:
+      - "8501:8501"
+    networks:
+      - mongo-net
+    restart: unless-stopped
+    volumes:
+      # Monta o próprio código-fonte por cima do que foi copiado no build
+      # (Dockerfile faz "COPY . ."), para que edições em app.py/queries.py/etc.
+      # apareçam no app sem precisar de "docker compose up -d --build" a cada
+      # alteração — o Streamlit detecta a mudança de arquivo e recarrega sozinho.
+      - ../scripts:/app
+      # Monta o dataset gerado pelo notebook (scripts/notebooks/...) dentro do
+      # container, para que carga_massa.py e os executar_testeN_*.py consigam
+      # ler os arquivos via "docker compose run --rm --entrypoint python app
+      # executar_teste1_insercao.py --arquivo dataset/eventos.jsonl".
+      - ../dataset:/app/dataset
+      # Monta documentacao/ também: é para lá que os scripts de teste salvam
+      # os CSVs e gráficos por padrão (--saida documentacao/resultados_...).
+      # Sem este volume, os resultados ficariam presos dentro do container e
+      # seriam perdidos ao final do "docker compose run".
+      - ../documentacao:/app/documentacao
+
+networks:
+  mongo-net:
+    driver: bridge
+
+volumes:
+  mongo1_data:
+  mongo2_data:
+  mongo3_data:

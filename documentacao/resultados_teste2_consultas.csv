@@ -1,0 +1,10 @@
+volume_documentos,consulta,tempo_medio_ms,tempo_mediana_ms,tempo_min_ms,tempo_max_ms,total_resultados
+1000,Por tipo,1.86,1.57,1.27,3.64,157
+1000,Por período,0.42,0.43,0.21,0.7,0
+1000,Geográfica (raio),1.88,1.57,1.39,4.4,92
+50000,Por tipo,71.61,54.77,48.62,190.49,7994
+50000,Por período,0.54,0.54,0.27,1.24,0
+50000,Geográfica (raio),71.77,63.47,60.62,190.32,5006
+50000,Por tipo,67.71,55.01,48.7,178.24,7994
+50000,Por período,0.39,0.31,0.26,1.13,0
+50000,Geográfica (raio),73.83,64.77,61.16,197.52,5006
