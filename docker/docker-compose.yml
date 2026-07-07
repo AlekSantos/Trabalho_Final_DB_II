@@ -45,7 +45,7 @@ services:
       - mongo-net
     restart: "no"
     volumes:
-      - ./docker/mongo-init.js:/mongo-init.js:ro
+      - ./mongo-init.js:/mongo-init.js:ro
     entrypoint: |
       bash -c "
       until mongosh --host mongo1:27017 --eval 'db.runCommand(\"ping\")' &>/dev/null; do
@@ -62,7 +62,7 @@ services:
 
   app:
     build:
-      context: ./scripts
+      context: ../scripts
       dockerfile: Dockerfile
     container_name: eventos-app
     depends_on:
@@ -76,9 +76,9 @@ services:
       - mongo-net
     restart: unless-stopped
     volumes:
-      - ./scripts:/app
-      - ./dataset:/app/dataset
-      - ./documentacao:/app/documentacao
+      - ../scripts:/app
+      - ../dataset:/app/dataset
+      - ../documentacao:/app/documentacao
 
 networks:
   mongo-net:
