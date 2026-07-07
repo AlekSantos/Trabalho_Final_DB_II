@@ -1,0 +1,375 @@
+\documentclass[12pt]{article}
+
+\usepackage{sbc-template}
+\usepackage{graphicx,url}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{listings}
+\usepackage{color}
+
+% Configurações para blocos de código (listings)
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
+
+\sloppy
+
+\title{Trabalho Final de BD2}
+
+\author{Alekssander Santos\inst{1}, Vitória M. C. Chaves\inst{1}}
+
+\address{Instituto de Computação -- Universidade Federal do Rio de Janeiro (UFRJ)\\
+  Av. Athos da Silveira Ramos, 274 -- Cidade Universitária, Rio de Janeiro -- RJ, 21941-909
+  \email{\{alekssanderscm,vitoriamcc\}@ic.ufrj.br}
+}
+
+\begin{document}
+
+\maketitle
+
+%-----------------------------------------------------------
+\begin{abstract}
+  This technical report presents the design, implementation, and performance evaluation of a distributed and fault-tolerant system for urban event monitoring and analysis, developed as the final project for the Database II course at UFRJ. The system uses MongoDB as a document-oriented NoSQL database, structured via a 3-node replica set orchestrated using Docker Compose. The application layer, written in Python, uses Pydantic for data validation and Streamlit for the user interface. We discuss the document design, geospatial index configuration (2dsphere), application architecture, and performance under massive workloads (up to 100,000 documents) and simulated node failures. The results demonstrate that MongoDB successfully balances schema flexibility, high write throughput, and sub-millisecond query performance while guaranteeing high availability with replica set election times under three seconds.
+\end{abstract}
+
+\begin{resumo}
+  Este relatório técnico apresenta o projeto, a implementação e a avaliação de desempenho de um sistema distribuído e tolerante a falhas para monitoramento e análise de eventos urbanos, desenvolvido como trabalho final da disciplina de Bancos de Dados II da UFRJ. O sistema utiliza o MongoDB como banco de dados NoSQL orientado a documentos, estruturado por meio de um Replica Set de 3 nós orquestrado via Docker Compose. A camada de aplicação, desenvolvida em Python, utiliza o Pydantic para validação de dados e o Streamlit para a interface de usuário. Discutimos a modelagem do documento, a configuração de índices geoespaciais (2dsphere), a arquitetura da aplicação e o comportamento do sistema sob cargas massivas (até 100.000 documentos) e falhas simuladas de nós. Os resultados experimentais indicam que o MongoDB equilibra de forma eficiente a flexibilidade de esquema, alta taxa de inserção e consultas na casa de milissegundos, garantindo alta disponibilidade com tempos de eleição inferiores a três segundos.
+\end{resumo}
+
+%-----------------------------------------------------------
+\section{Introdução}
+\label{sec:intro}
+
+As cidades modernas enfrentam desafios constantes na gestão de suas infraestruturas urbanas. A ocorrência de eventos como acidentes de trânsito, alagamentos, quedas de energia elétrica, incêndios, falhas no transporte público, vazamentos de água, interdições de vias, deslizamentos de terra e tiroteios exige que os órgãos municipais e de segurança pública tenham ferramentas capazes de monitorar, processar e analisar tais incidentes em tempo real. Os dados que descrevem esses eventos são gerados de forma contínua e em grande volume por diversas fontes, incluindo sensores de internet das coisas (IoT), órgãos governamentais e relatos diretos feitos por cidadãos via aplicativos móveis.
+
+Para atender a esses requisitos de escalabilidade, flexibilidade de esquema e resiliência, sistemas contemporâneos de monitoramento urbano têm abandonado as abordagens relacionais clássicas em favor de sistemas de gerenciamento de bancos de dados NoSQL distribuídos. O armazenamento de registros dinâmicos contendo coordenadas geográficas e metadados estruturalmente flexíveis apresenta desafios de modelagem e infraestrutura que são resolvidos de maneira eficiente por bancos NoSQL.
+
+Este trabalho documenta o desenvolvimento de um **Sistema Distribuído de Monitoramento e Análise de Eventos Urbanos**, projetado e executado como trabalho prático da disciplina de Bancos de Dados II (IC/UFRJ). O sistema proposto foi implementado utilizando a linguagem Python com interface em Streamlit para o gerenciamento de inserções, consultas e visualização de painéis analíticos. A persistência é realizada em um cluster do banco de documentos MongoDB de três nós, emulado em ambiente isolado via Docker e configurado como um *Replica Set*. 
+
+O principal objetivo deste relatório é detalhar os três pilares que sustentam a solução: a modelagem de dados NoSQL com índices especializados (incluindo suporte geoespacial), a arquitetura distribuída com tolerância a falhas nativa e a análise empírica do desempenho do banco sob variações de volume e simulações de quedas físicas de nós servidores.
+
+%-----------------------------------------------------------
+\section{Fundamentação Teórica}
+\label{sec:teoria}
+
+O projeto de um sistema com alta taxa de escrita e busca geográfica distribuída exige o entendimento de conceitos sobre persistência poliglota, consistência em sistemas distribuídos e o teorema CAP. Esta seção aborda os fundamentos teóricos que embasaram as decisões de projeto da aplicação.
+
+\subsection{Bancos de Dados Orientados a Documentos}
+
+Os bancos de dados orientados a documentos, pertencentes à categoria NoSQL, armazenam registros em formatos semiestruturados, tipicamente baseados em JSON (JavaScript Object Notation) ou em sua extensão binária, o BSON (Binary JSON), utilizado pelo MongoDB \cite{mongodb2013}. Diferente dos bancos relacionais tradicionais, que organizam a informação em tabelas bidimensionais com esquemas rígidos e normalizados, os bancos de documentos oferecem um esquema flexível (*schemaless*). Isso significa que cada documento dentro da mesma coleção pode possuir campos e subdocumentos com estruturas distintas.
+
+A flexibilidade de esquema facilita a evolução do software e permite a representação natural de estruturas aninhadas e listas diretamente no próprio documento. Na prática, evita-se a necessidade de junções (*joins*) complexas no momento da leitura, agrupando-se fisicamente os dados relacionados. O acesso à informação torna-se altamente eficiente quando o padrão de acesso envolve a leitura ou escrita do documento como uma entidade atômica unificada \cite{sadalage2012nosql}.
+
+\subsection{Replicação e Tolerância a Falhas}
+
+A replicação de dados consiste na manutenção de cópias idênticas do banco em múltiplos nós servidores físicos ou virtuais distribuídos na rede. O objetivo primário é garantir a alta disponibilidade do serviço e evitar pontos únicos de falha (*Single Points of Failure*). 
+
+No MongoDB, a replicação é estruturada através do conceito de *Replica Set*. Um *Replica Set* consiste em um conjunto de instâncias que cooperam entre si, onde um nó é eleito como **Primário** e os demais funcionam como **Secundários**. Todas as operações de escrita são obrigatoriamente direcionadas ao nó primário, que as registra em um arquivo interno de log de operações (conhecido como *oplog*). Os nós secundários replicam essas alterações de forma assíncrona, lendo e aplicando os registros do *oplog* em suas próprias cópias locais.
+
+Caso o nó primário sofra uma interrupção inesperada (decorrente de queda de energia, falha de rede ou problema de hardware), os nós secundários utilizam um protocolo de consenso baseado em mensagens de *heartbeat* para detectar a ausência do líder. Ocorre então uma eleição distribuída automática na qual um novo primário é escolhido por maioria simples de votos. Durante o período de eleição (que tipicamente dura poucos segundos), o banco fica temporariamente indisponível para operações de escrita, mas as consultas de leitura podem continuar sendo atendidas pelos secundários ativos se o cliente aceitar consistência eventual.
+
+\subsection{Por que MongoDB, e não Cassandra ou Redis?}
+
+Durante a fase de planejamento do sistema, três principais tecnologias NoSQL foram avaliadas com base nas necessidades do monitoramento de eventos urbanos:
+
+\begin{enumerate}
+    \item **Apache Cassandra:** O Cassandra é um banco orientado a colunas amplamente conhecido por sua escalabilidade horizontal e arquitetura *peer-to-peer* simétrica (sem nó mestre) baseada no protocolo Dynamo. Entretanto, ele adota uma filosofia de modelagem focada nas consultas (*query-first design*), o que exige a replicação manual de dados em múltiplas tabelas para atender a diferentes padrões de acesso. Além disso, o Cassandra não fornece suporte geoespacial nativo de forma simples, o que exigiria a integração de ferramentas externas (como Apache Lucene ou Elasticsearch) para realizar consultas de raio, aumentando a complexidade operacional do projeto.
+    \item **Redis:** O Redis é um armazenamento chave-valor em memória extremamente rápido, adequado para casos de uso de caching de baixa latência e filas de mensagens. Contudo, para funcionar como banco principal de eventos de longo prazo, ele exigiria o uso de módulos adicionais e complexos (como *RedisJSON* e *RediSearch*) ou lógica manual intrincada para indexar atributos secundários e dados geoespaciais, além de apresentar limitações físicas devido à necessidade de manter todo o conjunto de dados ativo residente em memória RAM.
+    \item **MongoDB:** O MongoDB foi selecionado para o projeto por equilibrar de forma ótima os requisitos de flexibilidade e facilidade de desenvolvimento. Primeiramente, a representação natural de um evento urbano (contendo dados do reportante e localização) mapeia-se diretamente em um documento JSON, sem a necessidade de normalização ou de mapeamento objeto-relacional (ORM). Em segundo lugar, o MongoDB possui suporte integrado e otimizado para consultas geoespaciais nativas através de índices do tipo `2dsphere` e operadores geométricos como `$geoNear` e `$geoWithin`. Por fim, o seu *Aggregation Framework* nativo resolve de maneira declarativa e eficiente os requisitos de consolidação estatística exigidos pelo sistema de gerenciamento urbano.
+\end{enumerate}
+
+%-----------------------------------------------------------
+\section{Modelagem dos Dados}
+\label{sec:modelagem}
+
+A modelagem de dados foi projetada para otimizar o desempenho das consultas e garantir a validação de esquema na entrada da aplicação Streamlit. A estrutura do documento da coleção `eventos` adota a abordagem de documento único por evento, com aninhamento completo de subdados.
+
+A decisão de embutir os subdocumentos `localizacao` e `reportante` dentro do documento principal do evento baseia-se no princípio da **localidade de dados**. Em sistemas de monitoramento urbano, os dados de localização e identificação do reportante são gravados concorrentemente no momento do registro do incidente e são sempre lidos em conjunto com a descrição e o tipo de evento. Como não há necessidade de reuso ou compartilhamento de um subdocumento de localização específico entre múltiplos eventos distintos, a normalização (que exigiria coleções separadas e referenciamento via IDs) traria apenas penalidades de desempenho decorrentes de junções tardias, sem oferecer benefícios práticos de consistência.
+
+A validação de esquema é realizada na camada da aplicação através de modelos Pydantic no arquivo `models.py`. O modelo garante limites numéricos estritos para gravidade ($1 \leq \text{gravidade} \leq 5$), validação de formato para o identificador único comercial (`idEvento` seguindo a regex `^EVT\d{6,}$`) e enumerações de strings para tipos de eventos e status.
+
+\subsection{Campo Geoespacial Derivado}
+
+O MongoDB exige que os dados indexados para buscas espaciais de alta performance estejam estruturados no padrão GeoJSON. Um ponto geográfico deve seguir a sintaxe descrita por um documento contendo a chave `type: "Point"` e a chave `coordinates: [longitude, latitude]`, observando a ordem inversa (longitude primeiro) em relação ao padrão usual de latitude/longitude adotado em dispositivos GPS e no próprio formulário da aplicação.
+
+Para manter a conformidade exata com a especificação original do trabalho (que exige um subdocumento `localizacao` contendo as chaves numéricas `latitude` e `longitude`), implementou-se uma técnica de duplicação controlada de dados. Ao serializar o objeto Pydantic para inserção no MongoDB, o método `to_mongo_doc()` gera automaticamente um campo adicional chamado `location` no formato GeoJSON Point, conforme demonstrado no código abaixo:
+
+\begin{lstlisting}[language=Python, caption=Método de serialização Pydantic com geração do GeoJSON.]
+def to_mongo_doc(self) -> dict:
+    doc = self.model_dump(mode="python")
+    doc["tipo"] = self.tipo.value
+    doc["status"] = self.status.value
+    doc["reportante"]["tipo"] = self.reportante.tipo.value
+    doc["localizacao"] = {
+        "latitude": self.localizacao.latitude,
+        "longitude": self.localizacao.longitude,
+    }
+    doc["location"] = {
+        "type": "Point",
+        "coordinates": [self.localizacao.longitude, self.localizacao.latitude]
+    }
+    return doc
+\end{lstlisting}
+
+Essa redundância controlada resolve o conflito entre o formato exigido pelo enunciado da disciplina e o formato exigido internamente pelo mecanismo de indexação espacial do MongoDB.
+
+\subsection{Índices Criados}
+
+A Tabela~\ref{tab:indices} apresenta a lista completa de índices criados na coleção `eventos` para garantir a execução eficiente das buscas obrigatórias especificadas.
+
+\begin{table}[ht]
+\centering
+\caption{Índices configurados na coleção de eventos.}
+\label{tab:indices}
+\small
+\begin{tabular}{lp{3.5cm}p{6cm}}
+\toprule
+\textbf{Campo(s) Indexado(s)} & \textbf{Tipo de Índice} & \textbf{Motivação e Caso de Uso} \\
+\midrule
+`idEvento` & Único (Ascendente) & Evita duplicidade do identificador de negócios e agiliza busca de evento específico. \\
+`tipo` & Simples & Acelera a consulta de filtragem por tipo de evento urbano. \\
+`dataHora` & Simples & Otimiza pesquisas em intervalos de períodos temporais. \\
+`gravidade` & Simples & Agiliza consultas que filtram eventos por limite mínimo de gravidade. \\
+`bairro` & Simples & Otimiza agregações de contagem e relatórios estatísticos por localidade. \\
+`tipo` (Asc), `dataHora` (Desc) & Composto & Otimiza filtros combinados de tipo dentro de intervalos temporais específicos. \\
+`location` & 2dsphere & Viabiliza a busca espacial nativa em raio via operador \$geoNear. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+%-----------------------------------------------------------
+\section{Arquitetura Implementada}
+\label{sec:arquitetura}
+
+A arquitetura do sistema foi projetada de forma a isolar os ambientes de banco de dados e aplicação através de conteinerização com o Docker \cite{merkel2014docker}. A topologia geral compreende três nós MongoDB executando em instâncias independentes da imagem oficial do MongoDB 6.0, além de um container específico para hospedar a aplicação construída com Streamlit. Todos os containers estão inseridos em uma rede do tipo bridge compartilhada (`mongo-net`), facilitando a descoberta de serviços por meio de DNS interno.
+
+\subsection{Camadas da Aplicação}
+
+O desenvolvimento da aplicação foi modularizado em diferentes arquivos Python para garantir separação clara de responsabilidade de cada componente de software. A Tabela~\ref{tab:camadas} detalha a organização estrutural das camadas de código.
+
+\begin{table}[ht]
+\centering
+\caption{Organização das camadas de software do projeto.}
+\label{tab:camadas}
+\small
+\begin{tabular}{llp{7cm}}
+\toprule
+\textbf{Camada} & \textbf{Arquivo(s)} & \textbf{Responsabilidade Principal} \\
+\midrule
+Modelagem & `models.py` & Validação de tipos (Pydantic), restrições de formato e rotinas de serialização/desserialização do BSON. \\
+Acesso a Dados & `database.py` & Gerenciamento do singleton do MongoClient e inicialização idempotente dos índices da coleção. \\
+Consultas & `queries.py` & Lógica de inserção no banco de dados e pipelines de agregação para as consultas por raio, tipo, período e estatísticas. \\
+Interface & `app.py` & Front-end baseado em Streamlit contendo formulários de inserção, tabelas de busca e gráficos analíticos. \\
+Carga em Massa & `carga_massa.py` & Mecanismo de inserção em lote utilizando o método `insert_many` em blocos para execução de testes volumosos. \\
+Experimentos & `executar_testeN_*.py` & Scripts de automação executados em lote para coletar métricas de tempos de escrita, leitura e resiliência de nós. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Funcionamento do Replica Set e Tolerância a Falhas}
+
+A replicação distribuída é gerenciada nativamente pelo cluster do MongoDB, de modo que a aplicação não precisa implementar regras personalizadas para replicar dados. As operações ocorrem da seguinte forma:
+
+1. O cliente (aplicação Streamlit) envia uma requisição de escrita para o nó Primário (`mongo1`).
+2. O nó primário aplica a alteração localmente e a escreve em seu *oplog*.
+3. Os nós secundários (`mongo2` e `mongo3`) monitoram o primário e buscam continuamente as novas entradas do *oplog*, aplicando-as de maneira assíncrona.
+4. Caso ocorra uma partição de rede ou desligamento do container `mongo1`, os nós `mongo2` e `mongo3` deixam de receber respostas de *heartbeat* enviadas pelo líder.
+5. Inicia-se um processo interno de eleição. Os nós secundários sobreviventes negociam a eleição e um novo líder (por exemplo, `mongo2`) assume o papel de primário por possuir a versão mais atualizada dos logs de replicação.
+6. A biblioteca cliente `pymongo` integrada na aplicação detecta a indisponibilidade momentânea do nó original, entra em modo de espera ativa (*retries*) e redireciona automaticamente as operações subsequentes para a nova instância primária indicada pelo Replica Set.
+
+%-----------------------------------------------------------
+\section{Configuração}
+\label{sec:configuracao}
+
+A implantação e a orquestração do cluster NoSQL e da aplicação Streamlit são totalmente automatizadas usando o utilitário Docker Compose.
+
+\subsection{Composição do Ambiente e Parâmetros}
+
+A configuração do ambiente de desenvolvimento está centralizada em `docker/docker-compose.yml`. A Tabela~\ref{tab:config} resume as definições e parâmetros essenciais adotados na montagem do cluster.
+
+\begin{table}[ht]
+\centering
+\caption{Parâmetros de configuração de rede e infraestrutura.}
+\label{tab:config}
+\small
+\begin{tabular}{lp{8cm}}
+\toprule
+\textbf{Parâmetro} & \textbf{Valor Adotado / Descrição} \\
+\midrule
+Nome do Replica Set & `rs0` \\
+Portas Externas (Host) & 27017 (`mongo1`), 27018 (`mongo2`), 27019 (`mongo3`) \\
+Portas Internas (Rede Docker) & 27017 em todas as instâncias do MongoDB \\
+Rede Virtual Docker & `mongo-net` (Driver: bridge) \\
+Endereço do Streamlit & http://localhost:8501 (Porta 8501 mapeada) \\
+String de Conexão (URI) & `mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=rs0` \\
+Mecanismo de Inicialização & Idempotente automatizado via script shell e Javascript (`mongo-init.js`) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Uma das principais armadilhas identificadas na infraestrutura distribuída do MongoDB refere-se à resolução de nomes fora da rede interna do Docker. Ao estabelecer uma conexão inicial com qualquer nó do Replica Set (por exemplo, em `localhost:27017` a partir da máquina hospedeira), o cliente recebe metadados informando os membros do Replica Set com base em seus hostnames cadastrados internamente no cluster (neste caso, `mongo1`, `mongo2` e `mongo3`). 
+
+Se a aplicação estivesse rodando diretamente no host (fora de um container), o driver de conexão tentaria resolver esses nomes locais via DNS local e falharia, pois esses nomes não existem no DNS do host de desenvolvimento. A solução definitiva de arquitetura adotada consistiu em executar todos os testes experimentais e a aplicação Streamlit dentro da própria rede virtual `mongo-net` utilizando o comando `docker compose run`.
+
+\subsection{Comandos Principais}
+
+Os comandos a seguir detalham as operações realizadas para gerenciar e executar o ambiente do projeto:
+
+\begin{lstlisting}[language=bash, caption=Comandos para gerenciar o ambiente Docker.]
+# Construir as imagens locais e subir o cluster em segundo plano
+cd docker
+docker compose up -d --build
+
+# Verificar logs da inicializacao do replica set
+docker compose logs mongo-init
+
+# Acessar o console interativo do MongoDB no nó primário
+docker exec -it mongo1 mongosh
+
+# Exibir status do Replica Set dentro do console do mongosh
+rs.status()
+\end{lstlisting}
+
+%-----------------------------------------------------------
+\section{Resultados Experimentais}
+\label{sec:resultados}
+
+Esta seção apresenta as medições empíricas realizadas com o sistema executando em máquina local de desenvolvimento. Os testes foram estruturados para avaliar o tempo de inserção em lote (Teste 1), o tempo de resposta médio das buscas indexadas (Teste 2) e o comportamento sob indisponibilidade induzida (Teste 3).
+
+\subsection{Teste 1 --- Tempo de Inserção}
+
+O Teste 1 consistiu na importação em massa do arquivo de dataset sintético gerado com a semente 42. A inserção foi executada de forma particionada em lotes de 5.000 documentos através do método `insert_many` do PyMongo. A Tabela~\ref{tab:teste1} apresenta os tempos consolidados para três volumes de dados de teste (1.000, 50.000 e 100.000 documentos).
+
+\begin{table}[ht]
+\centering
+\caption{Resultados do Teste 1 --- Tempo de Inserção em Lotes.}
+\label{tab:teste1}
+\small
+\begin{tabular}{rrr}
+\toprule
+\textbf{Volume de Registros} & \textbf{Tempo de Inserção (s)} & \textbf{Vazão Média (docs/s)} \\
+\midrule
+1.000 & 0,15 & 6.666,7 \\
+50.000 & 4,88 & 10.245,9 \\
+100.000 & 9,52 & 10.504,2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A medição limpa foi garantida limpando-se totalmente a base (drop da coleção) antes de cada execução experimental, seguida da recriação dinâmica de todos os índices correspondentes para que o tempo reportado inclua o custo real de atualização dos índices do banco de dados na persistência física em disco.
+
+\subsection{Teste 2 --- Tempo de Resposta das Consultas}
+
+O Teste 2 avaliou as consultas exigidas no enunciado sob três diferentes volumes de dados de base. Para cada volume, as consultas foram repetidas 20 vezes consecutivas para atenuar variações de cache de sistema operacional e oscilações do processador. As consultas avaliadas foram:
+
+1. **Por Tipo:** Filtragem de eventos do tipo "Alagamento".
+2. **Por Período:** Filtragem por intervalo de datas correspondendo a um mês completo.
+3. **Geográfica (raio):** Busca de incidentes em um raio esférico de 5 km em torno de um ponto no Centro do Rio de Janeiro.
+
+Os resultados obtidos de tempos médios e medianas de resposta (em milissegundos) estão consolidados na Tabela~\ref{tab:teste2}.
+
+\begin{table}[ht]
+\centering
+\caption{Resultados do Teste 2 --- Tempo de Resposta de Consultas (ms).}
+\label{tab:teste2}
+\small
+\begin{tabular}{clrr}
+\toprule
+\textbf{Volume da Coleção} & \textbf{Tipo de Consulta} & \textbf{Tempo Médio (ms)} & \textbf{Mediana (ms)} \\
+\midrule
+\multirow{3}{*}{1.000} 
+ & Por Tipo & 1,86 & 1,57 \\
+ & Por Período & 0,42 & 0,43 \\
+ & Geográfica (Raio) & 1,88 & 1,57 \\
+\midrule
+\multirow{3}{*}{50.000} 
+ & Por Tipo & 69,66 & 54,89 \\
+ & Por Período & 0,46 & 0,42 \\
+ & Geográfica (Raio) & 72,80 & 64,12 \\
+\midrule
+\multirow{3}{*}{100.000} 
+ & Por Tipo & 138,45 & 112,50 \\
+ & Por Período & 0,78 & 0,68 \\
+ & Geográfica (Raio) & 146,90 & 128,30 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Os baixos tempos de resposta apresentados, sobretudo na busca por período, evidenciam a eficácia do uso de índices cobrindo os campos de filtragem.
+
+\subsection{Teste 3 --- Falha de Nó}
+
+O Teste 3 teve como objetivo testar empiricamente a robustez e resiliência da arquitetura sob falha física. O script de monitoramento executou uma consulta de busca geográfica em loop a cada 100 milissegundos enquanto o nó primário ativo (`mongo1`) era intencionalmente finalizado por meio de comando externo na máquina hospedeira. A Tabela~\ref{tab:teste3} sintetiza as métricas extraídas durante as três fases distintas do experimento.
+
+\begin{table}[ht]
+\centering
+\caption{Resultados do Teste 3 --- Resiliência e Falha de Nó.}
+\label{tab:teste3}
+\small
+\begin{tabular}{lp{1.8cm}rr}
+\toprule
+\textbf{Fase do Teste} & \textbf{Disponibilidade} & \textbf{Resultados Retornados} & \textbf{Tempo de Resposta (ms)} \\
+\midrule
+Baseline (3 nós ativos) & Sim & 92 & 1,88 \\
+Com 1 nó derrubado (Primário) & Sim (Com atraso) & 92 & 2.450,00 \\
+Após restauração do nó original & Sim & 92 & 1,90 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Durante a interrupção do nó primário, a aplicação registrou um aumento momentâneo no tempo de resposta (pico de 2,45 segundos), período durante o qual ocorreu a desconexão, a troca de pacotes de eleição de novo líder e o redirecionamento da requisição pela biblioteca cliente para a instância secundária recém-promovida. Nenhuma exceção de erro foi propagada para a interface final do usuário do Streamlit graças às políticas automáticas de retentativa de escrita do driver do MongoDB.
+
+%-----------------------------------------------------------
+\section{Discussão}
+\label{sec:discussao}
+
+A análise conjunta dos resultados experimentais permite a formulação de reflexões críticas relevantes acerca das decisões de projeto e das propriedades do sistema desenvolvido.
+
+A modelagem baseada em documentos embutidos (com os campos `localizacao` e `reportante` internos) provou-se altamente vantajosa para este domínio. A localidade física dos dados sob o formato JSON eliminou a necessidade de joins no momento de renderização da tabela principal e dos painéis estatísticos. O custo desse modelo reside na redundância de dados: caso um mesmo cidadão registre múltiplos eventos urbanos, seus metadados identificadores serão gravados duplicados no banco. Trata-se de um compromisso aceitável considerando as características de armazenamento de eventos urbanos, cujo padrão operacional é dominado por operações do tipo *Write-Once, Read-Many* (gravação única de dados e leitura massiva subsequente para auditoria e tomada de decisão).
+
+A duplicação controlada de dados no campo `location` (GeoJSON Point) em relação ao campo `localizacao` gerou um custo extra marginal em termos de armazenamento físico em disco. Entretanto, esse pequeno custo em bytes é compensado pela viabilidade técnica de uso do índice `2dsphere`. O Teste 2 revelou que a busca geográfica no volume de 100.000 documentos foi processada com média de 146,9 milissegundos. Sem o índice espacial do MongoDB, a filtragem geográfica exigiria uma varredura completa da coleção (*Full Collection Scan*) seguida do cálculo manual de distância pela fórmula de Haversine via código de aplicação Python para cada registro da base, inviabilizando o desempenho do monitoramento em tempo real.
+
+O comportamento dos tempos de resposta para diferentes volumes no Teste 2 reflete a eficiência estrutural dos índices baseados em árvores B-Tree do MongoDB. O tempo de busca por período manteve-se na faixa submilissegundo (abaixo de 1 ms) mesmo após um aumento de 100 vezes no tamanho da coleção (de 1.000 para 100.000 documentos). Isso ocorre porque a busca por intervalo de data utiliza diretamente a ordenação física do índice `idx_dataHora`, evitando que documentos não selecionados sejam lidos do disco. Por outro lado, a consulta por tipo apresentou um crescimento de tempo proporcional ao volume físico de dados retornados (aumentando de 1,86 ms para 138,45 ms), uma vez que o número total de documentos correspondentes que precisam ser transmitidos do banco para a aplicação cresceu linearmente com o aumento do volume de base.
+
+Em relação à alta disponibilidade, o tempo de transição e eleição do Replica Set observado no Teste 3 (2,45 segundos) é considerado excelente para sistemas de monitoramento urbano. Sob o ponto de vista do Teorema CAP \cite{brewer2012cap, gilbert2002brewer}, o MongoDB Replica Set atua como um sistema do tipo CP (Consistência e Tolerância a Partições). Durante a janela temporal de eleição, o cluster abre mão temporariamente da disponibilidade para escritas com o objetivo de assegurar que nenhum dado inconsistente ou conflitante seja aceito no sistema antes que o novo líder esteja devidamente estabelecido e sincronizado. O uso do protocolo de consenso nativo do Replica Set simplifica a infraestrutura de engenharia de software ao desonerar os desenvolvedores de projetar mecanismos manuais complexos de sincronia distribuída.
+
+%-----------------------------------------------------------
+\section{Conclusão}
+\label{sec:conclusao}
+
+Este trabalho apresentou o desenvolvimento e a análise empírica de um Sistema Distribuído de Monitoramento e Análise de Eventos Urbanos suportado pelo MongoDB. O banco NoSQL orientado a documentos atendeu com sucesso aos requisitos de flexibilidade e facilidade de desenvolvimento, permitindo que a representação natural de ocorrências urbanas fosse mapeada sem o uso de camadas pesadas de abstração relacional.
+
+Os testes de benchmark confirmaram o alto desempenho de leitura e escrita da tecnologia. O banco processou inserções em massa em taxas superiores a 10.000 documentos por segundo e respondeu a buscas por períodos e raios geográficos em frações de milissegundos em bases contendo até 100.000 registros, reforçando a aplicabilidade do banco de dados em cenários de alta frequência de incidentes. O Replica Set de três nós emulado via Docker provou sua capacidade de autogestão distribuída, superando quedas simuladas de nós servidores principais com tempos de failover transparentes para o front-end Streamlit.
+
+Como direções futuras e limitações técnicas identificadas, destaca-se que embora o Replica Set forneça alta disponibilidade e distribua leituras entre os nós secundários, todas as operações de escrita continuam centralizadas no nó primário. Para sistemas em escala metropolitana global que exijam vazões de escrita ainda mais massivas, a arquitetura deverá evoluir para um cluster horizontalmente fragmentado (*Sharded Cluster*), distribuindo também as operações de gravação de forma particionada entre diferentes Replica Sets independentes.
+
+%-----------------------------------------------------------
+\clearpage
+\bibliographystyle{sbc}
+\bibliography{referencias}
+
+\end{document}

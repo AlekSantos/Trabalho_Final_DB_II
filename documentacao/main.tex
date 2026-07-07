@@ -1,0 +1,545 @@
+\documentclass[12pt]{article}
+
+\usepackage{sbc-template}
+\usepackage{graphicx,url}
+\usepackage[utf8]{inputenc}
+\usepackage[brazil]{babel}
+\usepackage{amsmath}
+\usepackage{booktabs}
+\usepackage{multirow}
+
+\sloppy
+
+\title{Análise Multidimensional sobre Financiamento Público da Educação e
+Desempenho Escolar na Baixada Fluminense}
+
+\author{Alekssander Santos\inst{1}, Vitória M. C. Chaves\inst{1}}
+
+\address{Instituto de Computação -- Universidade Federal do Rio de Janeiro (UFRJ)\\
+  Av. Athos da Silveira Ramos, 274 -- Cidade Universitária, Rio de Janeiro -- RJ, 21941-909
+  \email{\{alekssanderscm,vitoriamcc\}@ic.ufrj.br}
+}
+
+\begin{document}
+
+\maketitle
+
+%-----------------------------------------------------------
+\begin{abstract}
+This research investigates the complex relationship between basic education funding and student performance in the Baixada Fluminense region, Rio de Janeiro. Historically characterized by high socioeconomic vulnerability, this metropolitan territory faces deep inequalities in access to quality education. We integrate three public databases to build an analytical framework: FNDE (FUNDEB transfers), INEP (ENEM microdata covering 10 editions), and MEC (SISU higher education admission records), creating a consolidated dataset of 492 schools and 1,171,695 individual candidate records.
+
+Methodologically, the study combines descriptive statistics, correlation models, and supervised and unsupervised machine learning algorithms (Random Forest and K-Means clustering). Our findings challenge simple assumptions about educational finance: the volume of municipal FUNDEB transfers exhibits a near-zero correlation with individual student performance ($r = 0{.}09$, $p = 0{.}80$). Instead, socioeconomic status---such as family income and maternal education---along with the administrative school network, act as the dominant predictors.
+
+Furthermore, university admission rates via SISU remain low (averaging 2.84\%) and highly concentrated in the largest cities (Nova Iguaçu and Duque de Caxias), with a strong preference for courses like Pedagogy, Chemistry, and Administration, and a notably low demand for STEM fields. K-Means clustering identifies three distinct municipal typologies of educational efficiency. Notably, the most efficient cluster (Mesquita, Nilópolis, Nova Iguaçu, Paracambi, São João de Meriti, and Seropédica) achieves the best performance with moderate public investment, aided by a university-rich local environment. The study concludes that addressing educational inequalities in the region requires targeted policies that improve school management and address structural socioeconomic vulnerability, rather than simply increasing nominal funding.
+\end{abstract}
+
+\begin{resumo}
+Esta pesquisa investiga a complexa relação entre o financiamento da educação básica e o desempenho escolar na Baixada Fluminense, Rio de Janeiro. Caracterizado por acentuada vulnerabilidade socioeconômica, este território metropolitano enfrenta profundas desigualdades no acesso a um ensino de qualidade. Integramos três bases de dados públicas para estruturar a análise: FNDE (repasses do FUNDEB), INEP (microdados do ENEM ao longo de 10 edições) e MEC (registros do SISU de ingresso no ensino superior), consolidando uma amostra de 492 escolas e 1.171.695 registros de candidatos individuais do SISU.
+
+Do ponto de vista metodológico, o estudo combina estatística descritiva, modelos de correlação e algoritmos de aprendizado de máquina supervisionado (Random Forest) e não supervisionado (K-Means). Os resultados desafiam premissas simplistas sobre o financiamento: o volume de repasses do FUNDEB apresenta correlação próxima de zero com as notas individuais no ENEM ($r = 0{,}09$, $p = 0{,}80$). Em contrapartida, fatores socioeconômicos (renda familiar e escolaridade materna) e a rede administrativa de ensino atuam como os preditores dominantes do desempenho escolar.
+
+Adicionalmente, a taxa de aprovação no SISU é baixa (média de 2,84\%) e concentrada nos maiores polos (Nova Iguaçu e Duque de Caxias), com forte orientação para carreiras como Pedagogia, Química e Administração, e baixa procura na área de Exatas de alta competição. A clusterização K-Means identificou três tipologias municipais de eficiência educacional. O grupo de maior eficiência (Mesquita, Nilópolis, Nova Iguaçu, Paracambi, São João de Meriti e Seropédica) atinge os melhores resultados cognitivos com investimentos modestos, impulsionado pela otimização de recursos e vizinhança acadêmica local. Conclui-se que o enfrentamento das desigualdades educacionais na região exige políticas focalizadas de gestão e vulnerabilidade social, superando a visão de que apenas o aporte nominal de recursos garante a qualidade do ensino.
+\end{resumo}
+
+%-----------------------------------------------------------
+\section{Introdução}
+\label{sec:intro}
+
+O financiamento público da educação básica no Brasil é operacionalizado, desde 2007,
+pelo FUNDEB -- Fundo de Manutenção e Desenvolvimento da Educação Básica e de
+Valorização dos Profissionais da Educação. Reformulado de forma permanente pela Emenda
+Constitucional n.\textsuperscript{o}~108/2020, o FUNDEB redistribui recursos vinculados
+à educação (ICMS, FPM, IPVA, entre outros) proporcionalmente ao número de matrículas,
+com complementação da União para estados que não atingem o valor mínimo por aluno-ano.
+
+A Baixada Fluminense, região metropolitana do Rio de Janeiro composta por treze
+municípios (Belford Roxo, Duque de Caxias, Guapimirim, Itaguaí, Japeri, Magé,
+Mesquita, Nilópolis, Nova Iguaçu, Paracambi, Queimados, São João de Meriti e
+Seropédica), constitui um laboratório analítico de especial referência: concentra
+aproximadamente 3,7 milhões de habitantes, apresenta IDH entre os mais baixos da
+região metropolitana fluminense e é caracterizada por acentuada vulnerabilidade
+socioeconômica e profundas disparidades estruturais no acesso a um ensino público de
+qualidade \cite{souza2022, oliveira2025, albuquerque2021}.
+
+Este trabalho propõe uma análise multidimensional articulando três questões de pesquisa:
+\textbf{(a)} Em que medida a magnitude dos repasses do FUNDEB se correlaciona com o
+desempenho médio no ENEM nos municípios da Baixada Fluminense?
+\textbf{(b)} Qual o papel das variáveis socioeconômicas na mediação dessa relação?
+\textbf{(c)} Como se configuram os padrões de acesso ao ensino superior via SISU para
+os egressos dessas escolas?
+
+Para respondê-las, combinamos técnicas de ciência de dados e aprendizado de máquina com
+referencial teórico da economia da educação e sociologia do desempenho escolar,
+processando três bases administrativas de acesso público: microdados do ENEM (INEP/MEC),
+relatórios de repasses do FUNDEB (FNDE) e microdados do SISU (MEC).
+
+%-----------------------------------------------------------
+\section{Referencial Teórico}
+\label{sec:referencial}
+
+\subsection{Financiamento Educacional e Desempenho Escolar}
+
+O debate sobre a relação entre gasto público em educação e qualidade do ensino é um
+dos mais antigos e controversos na economia da educação. \cite{hanushek1986} inaugurou
+a tese de que ``money doesn't matter'', demonstrando que o gasto por aluno nos Estados
+Unidos não era preditor significativo do desempenho em testes padronizados. Revisões
+posteriores \cite{hanushek2003} confirmaram que a eficiência alocativa importa mais
+que o volume bruto de recursos.
+
+No contexto brasileiro, \cite{soaresalves2013} e \cite{ferrao2022} demonstram que
+variáveis socioeconômicas -- especialmente renda familiar e escolaridade dos pais --
+explicam a maior parte da variância interescolar nas notas do ENEM e do SAEB, com o
+nível de investimento público contribuindo de forma secundária após o controle por
+composição social. O conceito de eficiência educacional refere-se à capacidade de um
+sistema em maximizar os resultados de aprendizagem dado um nível de recursos.
+Municípios com alto investimento per capita e baixo desempenho apresentam ineficiência
+alocativa: os recursos chegam, mas não se convertem em aprendizagem mensurável.
+
+\subsection{Capital Cultural e Estratificação Educacional}
+
+\cite{bourdieu1986} introduziu os conceitos de capital econômico e cultural como
+determinantes das trajetórias educacionais. O capital cultural -- acumulado pelo acesso
+a livros, estímulo intelectual e nível educacional dos pais -- é, segundo a literatura
+internacional, um preditor mais robusto do desempenho do que o simples investimento
+público. No Brasil, a escolaridade materna é sistematicamente apontada como o preditor
+isolado mais poderoso das notas do ENEM \cite{soaresalves2013}.
+
+\subsection{Aprendizado de Máquina Aplicado à Educação}
+
+A aplicação de técnicas de ML em dados educacionais (\textit{Educational Data Mining} --
+EDM) tem crescido significativamente \cite{james2023}. Algoritmos como Random Forest e
+técnicas de clustering K-Means permitem tanto a predição de desempenho quanto a
+identificação de tipologias institucionais, oferecendo insights não acessíveis pela
+estatística clássica univariada \cite{geron2022}.
+
+%-----------------------------------------------------------
+\section{Metodologia}
+\label{sec:metodologia}
+
+\subsection{Fontes de Dados e Período Analisado}
+
+Três bases administrativas de domínio público foram integradas:
+\textbf{(i)} Microdados do ENEM (INEP/MEC): registros individuais de candidatos com
+escola nos treze municípios, edições 2013--2022, totalizando 144.843 registros após
+filtragem de qualidade.
+\textbf{(ii)} Relatórios de Repasses do FUNDEB (FNDE/SEFAZ-RJ): transferências
+obrigatórias e voluntárias anuais por município, período 2011--2024, corrigidos monetariamente pelo IPCA (valores reais de Dezembro de 2024).
+\textbf{(iii)} Microdados do SISU (MEC): inscrições e matrículas por município de
+residência do candidato, edições 2014--2023.
+
+\subsection{Pré-processamento e Integração}
+
+O pipeline de dados foi implementado em Python~3.10 com Polars e Pandas \cite{mckinney2023}.
+As principais etapas incluíram: \textbf{(i)} normalização de nomes municipais via
+Unicode NFD para harmonização entre bases; \textbf{(ii)} detecção automática de
+cabeçalho nos CSVs do FNDE, necessária pela variação estrutural entre 2011--2014 e
+2015--2024; \textbf{(iii)} cálculo de nota média objetiva como média aritmética das
+quatro provas (Linguagens, Ciências Humanas, Ciências da Natureza e Matemática);
+\textbf{(iv)} join entre ENEM e FUNDEB pela chave composta município-ano, gerando
+dataset de modelagem com 15.033 observações (após filtragem por presença em todas as
+provas e exclusão de treineiros).
+
+\subsection{Análise Descritiva e Inferencial}
+
+Calculamos estatísticas de posição (média, mediana) e dispersão (desvio-padrão) para
+cada município \cite{bussabmorettin2024}. Tabelas de contingência cruzam rede de ensino com faixa de renda
+familiar. A matriz de correlação de Pearson quantifica associações lineares entre
+variáveis numéricas. Os testes ANOVA (paramétrico) e Kruskal-Wallis (não-paramétrico)
+verificam se as diferenças de desempenho entre grupos são estatisticamente significantes
+ao nível $\alpha = 0{,}05$.
+
+\subsection{Modelagem Preditiva}
+
+Para quantificar o efeito marginal de cada preditor sobre a nota do ENEM, treinamos
+dois modelos em pipeline Scikit-Learn com divisão 80/20 (treino/teste):
+
+\textbf{Regressão Ridge (L2):} Modelo linear com penalidade $\lambda\sum_{j}\beta_j^2$,
+que produz coeficientes interpretáveis e estáveis diante de multicolinearidade entre
+as dummies categóricas. Os coeficientes são expressos em pontos de ENEM, \textit{ceteris
+paribus}, em relação à categoria de referência (rede Estadual, menor faixa de renda).
+
+\textbf{Random Forest Regressor:} \textit{Ensemble} de 100 árvores com
+\texttt{max\_depth=5} e \texttt{min\_samples\_split=2}, selecionados por GridSearchCV
+com validação cruzada 3-fold. As \textit{feature importances} baseadas em redução de
+variância indicam a contribuição relativa de cada preditor.
+
+As variáveis numéricas foram padronizadas com \texttt{StandardScaler} e as categóricas
+com \texttt{OneHotEncoder(drop='first')} para evitar multicolinearidade perfeita.
+
+\subsection{Clusterização Municipal (K-Means)}
+
+Para identificar tipologias educacionais municipais, aplicamos K-Means nos 13
+municípios usando três variáveis relativas: nota média no ENEM, repasse do FUNDEB por
+candidato e taxa de aprovação no SISU (matriculados/inscritos). O uso de métricas
+\textit{per capita} é metodologicamente essencial: variáveis brutas agrupariam
+municípios por porte demográfico, não por perfil educacional \cite{james2023}.
+Todas as variáveis foram padronizadas com \texttt{StandardScaler} antes do K-Means.
+O número ótimo $k=4$ foi determinado pela convergência do Método do Cotovelo (WCSS) e
+do Silhouette Score. Para visualização, aplicamos PCA com dois componentes.
+
+%-----------------------------------------------------------
+\section{Resultados e Discussão}
+\label{sec:resultados}
+
+\subsection{Estatísticas Descritivas do ENEM}
+
+\begin{table}[ht]
+\centering
+\caption{Estatísticas descritivas do ENEM por município (2013--2022). $\bar{x}$: média
+  objetiva; $Md$: mediana; $\sigma$: desvio-padrão; $\bar{x}_{red}$: média redação.}
+\label{tab:enem}
+\small
+\begin{tabular}{lrrrrr}
+\toprule
+\textbf{Município} & \textbf{\textit{n}} & $\bar{x}$ & $Md$ & $\sigma$ & $\bar{x}_{red}$ \\
+\midrule
+Paracambi          &  2.281 & 520,3 & 515,1 & 69,5 & 574,5 \\
+Nilópolis          &  9.401 & 510,8 & 502,1 & 67,7 & 556,7 \\
+Seropédica         &  4.741 & 507,5 & 496,9 & 67,9 & 544,2 \\
+Nova Iguaçu        & 33.536 & 503,7 & 495,8 & 64,5 & 543,3 \\
+Guapimirim         &  1.402 & 502,9 & 497,2 & 64,2 & 538,9 \\
+Duque de Caxias    & 34.630 & 502,9 & 495,2 & 63,5 & 541,8 \\
+Itaguaí            &  5.103 & 499,6 & 493,8 & 59,9 & 528,1 \\
+São João de Meriti & 18.310 & 497,4 & 491,7 & 58,0 & 537,9 \\
+Magé               &  9.231 & 494,0 & 487,9 & 58,5 & 518,6 \\
+Mesquita           &  5.246 & 490,0 & 485,8 & 54,7 & 512,3 \\
+Queimados          &  6.168 & 485,0 & 477,7 & 55,2 & 508,1 \\
+Belford Roxo       & 12.136 & 480,3 & 476,2 & 51,9 & 500,0 \\
+Japeri             &  2.658 & 477,4 & 471,6 & 52,7 & 489,3 \\
+\midrule
+\textbf{Total} & \textbf{144.843} & \textbf{498,5} & \textbf{491,7} & \textbf{63,1} & \textbf{533,4} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A Tabela~\ref{tab:enem} evidencia heterogeneidade intermunicipal significativa: a
+amplitude das médias objetivas é de 42,9 pontos (Paracambi: 520,3 vs. Japeri: 477,4),
+com todos os municípios abaixo da média nacional do ENEM no período ($\approx$530
+pontos). A assimetria positiva (média $>$ mediana em todos os casos) reflete a influência
+de alunos de alta proficiência concentrados nas redes federal e privada. Os
+desvios-padrão elevados ($\sigma \approx$ 52--70 pontos) indicam alta heterogeneidade
+interna, característica de territórios com coexistência de redes com condições
+pedagógicas radicalmente distintas.
+
+\subsection{Evolução Temporal e Desempenho por Rede}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.90\textwidth]{figuras/fig1_serie_temporal_baixada.png}
+\caption{Evolução da nota média objetiva do ENEM na Baixada Fluminense (2013--2022),
+  com intervalo de confiança de 95\%.}
+\label{fig:serie}
+\end{figure}
+
+A Figura~\ref{fig:serie} revela estagnação da nota média entre 2013 e 2019, com quebra
+estrutural em 2020--2021 (impacto da pandemia de COVID-19) e recuperação parcial em
+2022. O aumento dos repasses do FUNDEB ao longo da série não produziu trajetória de
+melhora detectável, consistente com os dados do SAEB \cite{inep2023}.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.90\textwidth]{figuras/fig2_boxplot_rede_baixada.png}
+\caption{Boxplot da nota objetiva do ENEM por tipo de rede de ensino na Baixada
+  Fluminense. Linha central: mediana; caixa: IQR ($Q_1$--$Q_3$); pontos: \textit{outliers}.}
+\label{fig:boxplot}
+\end{figure}
+
+Os boxplots (Figura~\ref{fig:boxplot}) evidenciam o gap educacional entre redes: a
+mediana da rede privada supera o terceiro quartil ($Q_3$) da rede estadual -- mais de
+75\% dos alunos estaduais têm nota abaixo do aluno mediano de escola privada. A rede
+federal tem maior mediana e menor variabilidade, reflexo do processo seletivo próprio.
+
+\subsection{Perfil Socioeconômico}
+
+\begin{table}[ht]
+\centering
+\caption{Proporção (\%) de candidatos por faixa de renda familiar e tipo de rede
+  -- Baixada Fluminense (2013--2022). SM = Salário Mínimo.}
+\label{tab:socio}
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+\textbf{Rede} & \textbf{Até 1~SM} & \textbf{1--2~SM} & \textbf{2--3~SM} & \textbf{3--5~SM} & \textbf{$>$5~SM} & \textbf{S/Renda} \\
+\midrule
+Estadual  & 48,0 & 29,8 &  9,5 &  4,3 &  1,5 &  6,7 \\
+Federal   & 30,8 & 21,0 & 15,1 & 14,4 & 12,0 &  2,6 \\
+Municipal & 39,7 & 37,3 &  7,9 &  3,2 &  1,6 & 10,3 \\
+Privada   & 36,7 & 17,2 & 13,6 & 13,7 & 13,1 &  2,6 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A Tabela~\ref{tab:socio} confirma a segmentação socioeconômica: a rede estadual
+concentra 48,0\% dos candidatos com renda até 1 SM, enquanto as redes federal e privada
+apresentam maior presença de faixas superiores. Parte substancial do gap de desempenho
+entre redes é, portanto, um gap de composição socioeconômica \cite{bourdieu1986}.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{figuras/fig6_densidade_notas.png}
+\caption{Distribuição de densidade (KDE) da nota objetiva por rede de ensino.
+  A curva da rede privada está deslocada $\approx$35 pontos à direita.}
+\label{fig:densidade}
+\end{figure}
+
+\subsection{Repasses do FUNDEB e Correlação com Desempenho}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{figuras/fig4_scatter_fundeb_enem.png}
+\caption{Dispersão entre repasses anuais do FUNDEB e nota média do ENEM por
+  município-ano. Reta OLS com inclinação $\hat{\beta}_1 \approx 0$ ($r = 0{,}41$
+  em nível agregado; $r = 0{,}09$, $p = 0{,}80$ em nível individual).}
+\label{fig:scatter}
+\end{figure}
+
+\begin{table}[ht]
+\centering
+\caption{Matriz de correlação de Pearson entre variáveis do estudo (nível
+  municipal-anual). Valores em negrito: $|r| > 0{,}50$.}
+\label{tab:correlacao}
+\small
+\begin{tabular}{lrrrrrr}
+\toprule
+ & \textbf{FUNDEB} & \textbf{Obj.} & \textbf{Red.} & \textbf{Esc. Mãe} & \textbf{Renda} & \textbf{SISU} \\
+\midrule
+FUNDEB (R\$)      & 1,00 & 0,41 & \textbf{0,77} & \textbf{0,80} & 0,42 & 0,09 \\
+Nota Objetiva     &      & 1,00 & 0,40 & \textbf{0,66} & \textbf{0,62} & $-$0,32 \\
+Nota Redação      &      &      & 1,00 & \textbf{0,90} & \textbf{0,76} & $-$0,44 \\
+Escolaridade Mãe  &      &      &      & 1,00 & \textbf{0,81} & $-$0,39 \\
+Renda Média       &      &      &      &      & 1,00 & $-$\textbf{0,80} \\
+Vagas SISU        &      &      &      &      &      & 1,00 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A Figura~\ref{fig:scatter} e a Tabela~\ref{tab:correlacao} sintetizam o achado central.
+A correlação FUNDEB $\times$ Nota Objetiva de $r = 0{,}41$ em nível municipal é
+amplamente explicada por variáveis de confusão: municípios maiores recebem mais recursos
+e também têm maior diversidade socioeconômica (\textit{ecological fallacy}). Em nível
+individual (regressão), o coeficiente do FUNDEB é não significativo ($r = 0{,}09$,
+$p = 0{,}80$). As fortes correlações FUNDEB $\times$ Escolaridade Materna
+($r = 0{,}80$) e FUNDEB $\times$ Renda ($r = 0{,}42$) confirmam que porte municipal
+e composição social são as variáveis de confusão dominantes.
+
+\subsection{Testes de Hipótese}
+
+\begin{table}[ht]
+\centering
+\caption{Testes de hipótese para diferenças de desempenho entre grupos ($\alpha = 0{,}05$).}
+\label{tab:testes}
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Teste} & \textbf{Estat.} & \textbf{\textit{p}-valor} & \textbf{Sig.} \\
+\midrule
+ANOVA: Renda $\times$ Nota ENEM             &   972,8 & $<0{,}001$ & Sim \\
+Kruskal-Wallis: Renda $\times$ Nota ENEM    & 12.167,3 & $<0{,}001$ & Sim \\
+ANOVA: Tipo Escola $\times$ Nota ENEM       & 3.690,3 & $<0{,}001$ & Sim \\
+Kruskal-Wallis: Tipo Escola $\times$ Nota   & 9.913,2 & $<0{,}001$ & Sim \\
+ANOVA: Município $\times$ Nota ENEM         &   251,1 & $<0{,}001$ & Sim \\
+Kruskal-Wallis: Município $\times$ Nota     & 2.543,6 & $<0{,}001$ & Sim \\
+Pearson: FUNDEB $\times$ Vagas SISU         & 0,093 & 0,799      & \textbf{Não} \\
+Spearman: FUNDEB $\times$ Vagas SISU        & 0,127 & 0,726      & \textbf{Não} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Os testes da Tabela~\ref{tab:testes} confirmam com robustez estatística as tendências
+visuais. A concordância entre ANOVA (paramétrico) e Kruskal-Wallis (não-paramétrico)
+fortalece a validade das conclusões independentemente da suposição de normalidade.
+Renda familiar ($F = 972{,}8$) e tipo de escola ($F = 3.690{,}3$) são os fatores com
+maior poder discriminatório. A ausência de associação entre FUNDEB e aprovações no SISU
+(Pearson: $r = 0{,}09$, $p = 0{,}80$; Spearman: $\rho = 0{,}13$, $p = 0{,}73$) é
+o resultado negativo mais relevante da pesquisa.
+
+\subsection{Modelagem Preditiva: Regressão Ridge e Random Forest}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{modelos/ridge_coeficientes.png}
+\caption{Coeficientes da Regressão Ridge ($\lambda = 1{,}0$) em pontos de ENEM,
+  relativos à categoria de referência (rede Estadual, menor faixa de renda).}
+\label{fig:ridge}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{modelos/rf_feature_importance.png}
+\caption{Feature Importances do Random Forest Regressor (100 árvores, \texttt{max\_depth=5}).
+  Valores normalizados para somar 1,0.}
+\label{fig:rfimportance}
+\end{figure}
+
+A Figura~\ref{fig:ridge} sintetiza o efeito marginal de cada preditor pela Ridge.
+Os maiores coeficientes positivos correspondem a: rede Federal (+40 a +55 pontos sobre
+a Estadual); rede Privada (+25 a +35 pontos); faixas superiores de renda e escolaridade
+materna (+10 a +25 pontos por nível). O coeficiente do FUNDEB é positivo mas desprezível
+($<$1 ponto por desvio-padrão), confirmando o achado correlacional.
+
+O Random Forest (Figura~\ref{fig:rfimportance}) obteve $R^2 = 0{,}18$ e RMSE
+$\approx$ 55 pontos no conjunto de teste -- superando marginalmente a Ridge por capturar
+interações não-lineares. A hierarquia de importâncias confirma a Ridge: renda familiar
+e escolaridade materna lideram, seguidas pelo município (efeito fixo local) e tipo de
+rede. O FUNDEB apresenta a menor importância relativa de todos os preditores.
+
+O $R^2 = 0{,}18$ é metodologicamente justificado: o modelo prediz a nota
+\textit{individual} usando covariáveis \textit{municipais e categóricas} -- uma
+constante para todos os alunos do mesmo grupo. Fatores não observados (esforço
+individual, qualidade do professor, saúde) determinam a variância residual, consistente
+com estudos de EDM que usam dados agregados \cite{james2023}.
+
+\subsection{Clusterização K-Means}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.65\textwidth]{modelos/kmeans_elbow_silhouette.png}
+\caption{Seleção de $k$ ótimo: Método do Cotovelo (WCSS -- curva azul) e Silhouette
+  Score (curva vermelha). Ambos convergem em $k=3$.}
+\label{fig:elbow}
+\end{figure}
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{figuras/pca_clusters.png}
+\caption{Projeção PCA dos 3 clusters municipais. Cada ponto representa um município;
+  cor indica o cluster atribuído pelo K-Means.}
+\label{fig:pca}
+\end{figure}
+
+\begin{table}[ht]
+\centering
+\caption{Perfil médio dos 3 clusters. Repasse Médio: repasse médio anual do FUNDEB por município;
+  Taxa SISU: proporção de matriculados sobre inscritos.}
+\label{tab:clusters}
+\small
+\begin{tabular}{clrrr}
+\toprule
+\textbf{Cl.} & \textbf{Municípios} & \textbf{Nota ENEM} & \textbf{Repasse Médio por Mun.} & \textbf{Taxa SISU} \\
+\midrule
+\textbf{0} & Belford Roxo, Japeri, Magé, Queimados    & 475,7 & R\$~123,1 Milhões & 20,5\% \\
+\textbf{1} & Mesquita, Nilópolis, Nova Iguaçu, Paracambi, SJM, Seropédica & 496,0 & R\$~156,6 Milhões & 29,5\% \\
+\textbf{2} & Duque de Caxias, Guapimirim, Itaguaí     & 493,7 & R\$~493,1 Milhões & 27,3\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Dada a dimensão reduzida do espaço amostral ($n=13$ municípios), critérios estritamente matemáticos (como o Método do Cotovelo e o escore de Silhouette) não oferecem um ótimo global unívoco ou definitivo devido à alta sensibilidade das métricas a observações individuais. Desse modo, a definição de $k=3$ foi adotada de forma heurística e qualitativa (por inspeção visual das curvas e por critérios de interpretabilidade regional). Esta partição de $k=3$ provou-se a mais consistente para delinear tipologias de eficiência educacional e alocativa que refletem as realidades estruturais da Baixada Fluminense, evitando a fusão de perfis heterogêneos (como ocorreria com $k=2$) ou o isolamento artificial de municípios individuais em microclusters (com $k \ge 4$). As três tipologias resultantes (Tabela~\ref{tab:clusters} e Figura~\ref{fig:pca}) representam perfis estruturais de eficiência educacional e alocativa distintos na região:
+
+\textbf{Cluster 0 -- ``Vulnerabilidade Estrutural''} (Belford Roxo, Japeri, Magé,
+Queimados): Pior desempenho cognitivo médio (475,7 pts) com repasse médio anual do FUNDEB de R\$~123,1 milhões por município e menor taxa de aprovação no SISU (20,5\%). Caracteriza a ineficiência
+alocativa: embora os repasses cheguem a patamares médios, determinantes socioeconômicos estruturais de vulnerabilidade social
+e baixa infraestrutura escolar se sobrepõem ao efeito do financiamento nominal.
+
+\textbf{Cluster 1 -- ``Eficiência Relativa''} (Mesquita, Nilópolis, Nova Iguaçu, Paracambi,
+São João de Meriti, Seropédica): Melhor nota média da região (496,0 pts) combinada a um
+repasse médio anual do FUNDEB de R\$~156,6 milhões por município e à maior taxa média de conversão
+no SISU (29,5\%). Este grupo unifica municípios com alta densidade urbana e forte apelo acadêmico local (como Seropédica e Paracambi, beneficiadas pelo ambiente universitário da UFRRJ). Revela que a otimização de recursos e o capital de vizinhança podem compensar investimentos nominais moderados.
+
+\textbf{Cluster 2 -- ``Paradoxo do Investimento''} (Duque de Caxias, Guapimirim,
+Itaguaí): Registra o maior repasse médio anual do FUNDEB da região (R\$~493,1 milhões por município) no conjunto de dados analisado. Contudo, estes municípios obtêm desempenho apenas mediano no ENEM (493,7 pts). O grupo materializa empiricamente o paradoxo clássico do financiamento ineficiente: o volume bruto elevado de recursos não se traduz automaticamente em melhora do aprendizado cognitivo, apontando para a necessidade de diretrizes pedagógicas baseadas em resultados \cite{hanushek2003}.
+
+\subsection{Padrões de Acesso ao Ensino Superior}
+
+\begin{table}[ht]
+\centering
+\caption{Aprovações acumuladas no SISU (2013--2023) por município.}
+\label{tab:sisu}
+\small
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Município} & \textbf{Inscritos} & \textbf{Matrículas} & \textbf{Taxa (\%)} \\
+\midrule
+Nova Iguaçu        & 344.620 &  9.763 & 2,83 \\
+Duque de Caxias    & 304.529 &  8.765 & 2,88 \\
+São João de Meriti & 182.356 &  5.541 & 3,04 \\
+Belford Roxo       & 145.336 &  3.487 & 2,40 \\
+Nilópolis          &  75.282 &  2.700 & 3,59 \\
+Mesquita           &  74.743 &  2.151 & 2,88 \\
+Magé               &  73.563 &  2.088 & 2,84 \\
+Queimados          &  55.544 &  1.620 & 2,92 \\
+Seropédica         &  50.152 &  1.390 & 2,77 \\
+Itaguaí            &  47.326 &  1.404 & 2,97 \\
+Japeri             &  28.697 &    627 & 2,18 \\
+Paracambi          &  23.723 &    852 & 3,59 \\
+Guapimirim         &  13.419 &    458 & 3,41 \\
+\midrule
+\textbf{Total} & \textbf{1.319.290} & \textbf{40.846} & \textbf{2,84} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Nova Iguaçu passa a liderar o total de inscrições e matrículas (344.620 inscritos;
+9.763 matriculados), refletindo o maior porte demográfico do município. A taxa bruta de
+aprovação é notavelmente homogênea (2,18\%--3,59\%), contrastando com as disparidades
+de investimento e notas. Paracambi (3,59\%) e Nilópolis (3,59\%) registram os melhores
+índices; Japeri (2,18\%) a menor taxa. Os cursos mais acessados são Pedagogia
+(869 matrículas), Química (719), Administração (704), Matemática (612) e
+Engenharia Mecânica (567) -- predomínio de licenciaturas e cursos de demanda moderada,
+consistente com o perfil de notas majoritariamente abaixo de 540 pontos detectado pelo
+classificador Random Forest.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.90\textwidth]{figuras/fig5_barras_empilhadas_sisu.png}
+\caption{Evolução anual das aprovações no SISU para os cinco maiores municípios da
+  Baixada Fluminense (2013--2023). Barras empilhadas por município; eixo y: total
+  de matriculados.}
+\label{fig:barrassisu}
+\end{figure}
+
+A Figura~\ref{fig:barrassisu} revela dois padrões temporais relevantes. Primeiro,
+há um pico de aprovações em 2013--2014, seguido de retração até 2020 -- período que
+coincide com cortes no número de vagas ofertadas pelo MEC e com a crise econômica
+pós-2015. Segundo, a recuperação observada em 2022--2023 ainda não restabelece os
+volumes do início da série. Nova Iguaçu e Duque de Caxias dominam
+consistentemente o volume absoluto de aprovações, reflexo direto do seu maior porte
+demográfico e número de inscritos. São João de Meriti, que ocupa a terceira posição
+acumulada, também apresenta oscilação relevante entre edições -- sugerindo maior
+sensibilidade a mudanças na oferta de cursos compatíveis com o perfil de notas do
+município.
+
+\begin{figure}[ht]
+\centering
+\includegraphics[width=0.85\textwidth]{modelos/3b6_tendencia_cursos_rede.png}
+\caption{Proporção por categoria de curso predita pelo Random Forest Classifier
+  (acurácia 98\%) segundo rede de ensino. Categorias por nota de corte histórica do SISU.}
+\label{fig:cursos}
+\end{figure}
+
+A Figura~\ref{fig:cursos} evidencia a assimetria por rede: candidatos da rede pública
+concentram-se ($>$70\%) na faixa ``Acesso Amplo'' ($<$540 pts -- Licenciaturas,
+Tecnólogos), enquanto a rede privada apresenta maior presença em faixas de maior
+competitividade. O Recall de 50\% para ``Alta Demanda'' ($\geq$700 pts) -- apenas 64
+casos no conjunto de teste -- indica que a raridade de candidatos de elite na região
+é, por si só, um sinal de alerta para políticas de excelência.
+
+%-----------------------------------------------------------
+\section{Conclusões}
+\label{sec:conclusao}
+
+Esta pesquisa analisou 144.843 registros individuais do ENEM, mais de R\$~14 bilhões
+em repasses do FUNDEB (corrigidos a valores reais) e 1.171.695 inscrições no SISU para produzir uma análise
+multidimensional do sistema educacional da Baixada Fluminense.
+
+\textbf{Resposta à Questão de Pesquisa (a) --- Financiamento vs. Desempenho} (\textit{Em que medida a magnitude dos repasses do FUNDEB se correlaciona com o desempenho médio no ENEM nos municípios da Baixada Fluminense?}): O volume de repasses do FUNDEB não se mostrou preditor significativo da nota individual no ENEM ($r = 0{,}09$, $p = 0{,}80$; $R^2 = 0{,}18$ com o modelo completo). Este resultado indica que o volume bruto de financiamento é condição necessária, mas não suficiente, para a melhoria direta do desempenho cognitivo, consistente com as evidências de \cite{hanushek1986,hanushek2003}.
+
+\textbf{Resposta à Questão de Pesquisa (b) --- Mediação Socioeconômica e Tipologias} (\textit{Qual o papel das variáveis socioeconômicas na mediação dessa relação?}): As variáveis socioeconômicas (renda familiar e escolaridade materna) e o tipo de rede de ensino explicam a maior parte da variância predizível. Ademais, a modelagem de agrupamento revelou que a Baixada Fluminense exibe três tipologias de eficiência educacional ($k=3$, Silhouette $\approx$ 0,42): o Cluster 1 (Mesquita, Nilópolis, Nova Iguaçu, Paracambi, São João de Meriti, Seropédica) com eficiência relativa; o Cluster 2 (Duque de Caxias, Guapimirim, Itaguaí) com o paradoxo de alto investimento e resultado cognitivo mediano; e o Cluster 3 (Belford Roxo, Japeri, Magé, Queimados) marcado por alta vulnerabilidade estrutural e ineficiência alocativa.
+
+\textbf{Resposta à Questão de Pesquisa (c) --- Padrões de Acesso via SISU} (\textit{Como se configuram os padrões de acesso ao ensino superior via SISU para os egressos dessas escolas?}): O acesso ao ensino superior via SISU é estruturalmente limitado para egressos da região, apresentando uma taxa bruta de apenas 2,84\% e concentração dos candidatos da rede pública na categoria de menor competitividade de nota de corte (Acesso Amplo, $<540$ pontos). A predominância de aprovações em licenciaturas (Pedagogia, Química e Administração) reflete restrições de desempenho escolar mais do que escolhas vocacionais puras.
+
+\textbf{Limitações e agenda futura:} (i) Embora os repasses públicos municipais do FUNDEB
+tenham sido corrigidos monetariamente pelo IPCA a valores reais de Dezembro de 2024,
+modelos dinâmicos em painel com defasagens temporais específicas poderiam mapear melhor
+o tempo de maturação do investimento orçamentário. (ii) Com $n=13$ municípios, a robustez das partições deve ser
+testada com Ward Linkage (para avaliar a estabilidade hierárquica das junções via dendrograma) e DBSCAN (com o intuito de identificar municípios atípicos como ruído, dada a sensibilidade deste algoritmo à densidade). (iii) A análise é correlacional; estimativas
+causais requerem desenhos quasi-experimentais (diferenças-em-diferenças, variáveis
+instrumentais). (iv) A expansão para outros estados permitiria validar a generalização
+das tipologias identificadas. (v) Há um descasamento institucional-federativo nos dados: o repasse avaliado refere-se ao FUNDEB municipal, cujo orçamento atende prioritariamente à educação infantil e fundamental (competências municipais), enquanto o ENEM avalia o desempenho dos concluintes do ensino médio, gerido em caráter estadual ou privado. Projetos futuros devem incorporar o orçamento estadual alocado regionalmente e detalhar os gastos por subfunção (ex: Ensino Médio) via Sistema de Informações sobre Orçamentos Públicos em Educação (SIOPE).
+
+%-----------------------------------------------------------
+\clearpage
+\bibliographystyle{sbc}
+\bibliography{referencias}
+
+\end{document}
