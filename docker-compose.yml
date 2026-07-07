@@ -34,6 +34,52 @@ services:
     networks:
       - mongo-net
 
+  mongo-init:
+    image: mongo:6.0
+    container_name: mongo-init
+    depends_on:
+      - mongo1
+      - mongo2
+      - mongo3
+    networks:
+      - mongo-net
+    restart: "no"
+    volumes:
+      - ./docker/mongo-init.js:/mongo-init.js:ro
+    entrypoint: |
+      bash -c "
+      until mongosh --host mongo1:27017 --eval 'db.runCommand(\"ping\")' &>/dev/null; do
+        echo 'Aguardando mongo1 inicializar...'
+        sleep 2
+      done
+      mongosh --host mongo1:27017 --quiet /mongo-init.js
+      until mongosh --host mongo1:27017 --quiet --eval 'rs.status().members.some(m => m.stateStr === \"PRIMARY\")' 2>/dev/null | grep -q 'true'; do
+        echo 'Aguardando eleição do Primary do Replica Set...'
+        sleep 2
+      done
+      echo 'Replica Set pronto com um Primary!'
+      "
+
+  app:
+    build:
+      context: ./scripts
+      dockerfile: Dockerfile
+    container_name: eventos-app
+    depends_on:
+      - mongo-init
+    environment:
+      MONGO_URI: "mongodb://mongo1:27017,mongo2:27017,mongo3:27017/?replicaSet=rs0"
+      MONGO_DB: "eventos_urbanos"
+    ports:
+      - "8501:8501"
+    networks:
+      - mongo-net
+    restart: unless-stopped
+    volumes:
+      - ./scripts:/app
+      - ./dataset:/app/dataset
+      - ./documentacao:/app/documentacao
+
 networks:
   mongo-net:
     driver: bridge

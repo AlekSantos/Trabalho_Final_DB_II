@@ -26,6 +26,25 @@ from models import Evento, Localizacao, Reportante, StatusEvento, TipoEvento, Ti
 
 st.set_page_config(page_title="Eventos Urbanos — Rio de Janeiro", page_icon="🌆", layout="wide")
 
+# Custom graphite sidebar styling
+st.markdown(
+    """
+    <style>
+    [data-testid="stSidebar"] {
+        background-color: #36454F !important;
+    }
+    [data-testid="stSidebar"] * {
+        color: #FFFFFF !important;
+    }
+    /* Style the radio buttons check and text */
+    [data-testid="stSidebar"] .st-bd {
+        color: #FFFFFF !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # Mesmos bairros e coordenadas usados no gerador de dados sintéticos, para que
 # os eventos cadastrados manualmente fiquem geograficamente coerentes com o
 # dataset carregado em massa.
