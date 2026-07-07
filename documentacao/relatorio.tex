@@ -38,9 +38,9 @@
 
 \sloppy
 
-\title{Trabalho Final de BD2}
+\title{Trabalho Final de Banco de Dados II}
 
-\author{Alekssander Santos\inst{1}, Fabio Patão\inst{1}, Vitória M. C. Chaves\inst{1}}
+\author{Alekssander S. C. Martins\inst{1}, Fabio N. Patão\inst{1}, Vitória M. C. Chaves\inst{1}}
 
 \address{Instituto de Computação -- Universidade Federal do Rio de Janeiro (UFRJ)\\
   Av. Athos da Silveira Ramos, 274 -- Cidade Universitária, Rio de Janeiro -- RJ, 21941-909
@@ -65,7 +65,7 @@ O projeto de um sistema com alta taxa de escrita e busca geográfica distribuíd
 
 \subsection{Bancos de Dados Orientados a Documentos}
 
-Bancos orientados a documentos NoSQL armazenam dados em formato semiestruturado, como o BSON do MongoDB. A flexibilidade de esquema facilita a evolução do software ao permitir estruturas aninhadas e dinâmicas, eliminando junções (\textit{joins}) complexas e agilizando as operações de leitura e escrita atômica do documento \cite{sadalage2012nosql}.
+Bancos orientados a documentos NoSQL armazenam dados em formato semiestruturado, como o BSON do MongoDB. A flexibilidade de esquema facilita a evolução do software ao permitir estruturas aninhadas e dinâmicas, eliminando junções (\textit{joins}) complexas e agilizando as operações de leitura e escrita atômica do documento.
 
 \subsection{Replicação e Tolerância a Falhas}
 
@@ -131,7 +131,7 @@ A Tabela~\ref{tab:indices} apresenta a lista completa de índices criados na col
 \section{Arquitetura Implementada}
 \label{sec:arquitetura}
 
-A arquitetura do sistema foi projetada de forma a isolar os ambientes de banco de dados e aplicação através de conteinerização com o Docker \cite{merkel2014docker}. A topologia geral compreende três nós MongoDB executando em instâncias independentes da imagem oficial do MongoDB 6.0, além de um container específico para hospedar a aplicação construída com Streamlit. Todos os containers estão inseridos em uma rede do tipo bridge compartilhada (`mongo-net`), facilitando a descoberta de serviços por meio de DNS interno.
+A arquitetura do sistema foi projetada de forma a isolar os ambientes de banco de dados e aplicação através de conteinerização com o Docker. A topologia geral compreende três nós MongoDB executando em instâncias independentes da imagem oficial do MongoDB 6.0, além de um container específico para hospedar a aplicação construída com Streamlit. Todos os containers estão inseridos em uma rede do tipo bridge compartilhada (`mongo-net`), facilitando a descoberta de serviços por meio de DNS interno.
 
 \subsection{Camadas da Aplicação}
 
@@ -166,7 +166,7 @@ A implantação e a orquestração do cluster NoSQL e da aplicação Streamlit s
 
 \subsection{Composição do Ambiente e Parâmetros}
 
-A configuração do ambiente de desenvolvimento está centralizada em `docker/docker-compose.yml`. A Tabela~\ref{tab:config} resume as definições e parâmetros essenciais adotados na montagem do cluster.
+A configuração do ambiente de desenvolvimento está centralizada em `docker-compose.yml`. A Tabela~\ref{tab:config} resume as definições e parâmetros essenciais adotados na montagem do cluster.
 
 \begin{table}[ht]
 \centering
@@ -297,15 +297,17 @@ O Teste 3 teve como objetivo testar empiricamente a robustez e resiliência da a
 \caption{Resultados do Teste 3 --- Resiliência e Falha de Nó.}
 \label{tab:teste3}
 \small
-\begin{tabular}{lp{1.8cm}rr}
+\resizebox{\columnwidth}{!}{%
+\begin{tabular}{lcrr}
 \toprule
-\textbf{Fase do Teste} & \textbf{Disponibilidade} & \textbf{Resultados Retornados} & \textbf{Tempo de Resposta (ms)} \\
+\textbf{Fase do Teste} & \textbf{Disponibilidade} & \textbf{Resultados} & \textbf{Tempo de Resposta (ms)} \\
 \midrule
 Baseline (3 nós ativos) & Sim & 10.000 & 101,00 \\
 Com 1 nó derrubado (Primário) & Sim & 10.000 & 160,11 \\
 Após restauração do nó original & Sim & 10.000 & 197,11 \\
 \bottomrule
-\end{tabular}
+\end{tabular}%
+}
 \end{table}
 
 Durante a interrupção do nó primário, a aplicação registrou um aumento controlado no tempo de resposta (pico de 160,11 milissegundos), período durante o qual ocorreu a desconexão, a troca de pacotes de eleição de novo líder e o redirecionamento da requisição pela biblioteca cliente para a instância secundária recém-promovida. Nenhuma exceção de erro foi propagada para a interface final do usuário do Streamlit graças às políticas automáticas de retentativa de escrita do driver do MongoDB.

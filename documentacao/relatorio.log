@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.5)  7 JUL 2026 11:03
+This is pdfTeX, Version 3.141592653-2.6-1.40.29 (TeX Live 2026) (preloaded format=pdflatex 2026.7.5)  7 JUL 2026 12:13
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -305,7 +305,7 @@ File: l3backend-pdftex.def 2026-02-18 L3 backend support: PDF output (pdfTeX)
 )
 (./relatorio.aux
 Package babel Info: 'brazil' activates 'portuges' shorthands.
-(babel)             Reported on input line 6.
+(babel)             Reported on input line 5.
 )
 \openout1 = `relatorio.aux'.
 
@@ -403,10 +403,6 @@ Overfull \hbox (17.56519pt too wide) in paragraph at lines 52--52
  [][] 
  []
 
-
-LaTeX Warning: Citation `sadalage2012nosql' on page 1 undefined on input line 6
-8.
-
 LaTeX Font Info:    Trying to load font information for TS1+pcr on input line 7
 6.
 (/usr/local/texlive/2026/texmf-dist/tex/latex/psnfss/ts1pcr.fd
@@ -448,11 +444,6 @@ Overfull \hbox (15.7152pt too wide) in paragraph at lines 115--128
  []
 
 [2]
-
-LaTeX Warning: Citation `merkel2014docker' on page 3 undefined on input line 13
-4.
-
-
 Underfull \hbox (badness 10000) in paragraph at lines 153--154
 []\OT1/ptm/m/n/10.95 Inser[][]ao em lote usando o m[]etodo
  []
@@ -466,6 +457,12 @@ Overfull \hbox (7.2508pt too wide) in paragraph at lines 145--157
 Underfull \hbox (badness 2790) in paragraph at lines 159--160
 []\OT1/ptm/m/n/12 A replica[][]ao []e ge-ren-ci-ada na-ti-va-mente pelo Mon-goD
 B. O cli-ente en-via
+ []
+
+
+Underfull \hbox (badness 2753) in paragraph at lines 169--170
+\OT1/ptm/m/n/12 A configura[][]ao do am-bi-ente de de-sen-vol-vi-mento est[]a c
+en-tra-li-zada em `docker-
  []
 
 [3]
@@ -502,31 +499,17 @@ File: resultados_teste2_consultas.png Graphic file (type png)
 Package pdftex.def Info: resultados_teste2_consultas.png  used on input line 28
 5.
 (pdftex.def)             Requested size: 204.85802pt x 128.03477pt.
-[5]
-Overfull \hbox (22.4225pt too wide) in paragraph at lines 302--302
-[]\OT1/ptm/b/n/10.95 Disponibilidade| 
- []
-
-
-Overfull \hbox (33.76991pt too wide) in paragraph at lines 300--309
- [][] 
- []
-
-[6 <./resultados_teste1_insercao.png> <./resultados_teste2_consultas.png>]
+[5] [6 <./resultados_teste1_insercao.png> <./resultados_teste2_consultas.png>]
 [7] (./relatorio.aux)
  ***********
 LaTeX2e <2026-06-01>
 L3 programming layer <2026-06-18>
  ***********
-
-
-LaTeX Warning: There were undefined references.
-
  ) 
 Here is how much of TeX's memory you used:
  7542 strings out of 467168
  119392 string characters out of 5409469
- 787896 words of memory out of 5000000
+ 787857 words of memory out of 5000000
  36701 multiletter control sequences out of 15000+600000
  655871 words of font info for 95 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
@@ -539,7 +522,7 @@ texlive/2026/texmf-dist/fonts/type1/urw/helvetic/uhvb8a.pfb></usr/local/texlive
 /2026/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2026/texm
 f-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texlive/2026/texmf-dist/fon
 ts/type1/urw/times/utmri8a.pfb>
-Output written on relatorio.pdf (7 pages, 183682 bytes).
+Output written on relatorio.pdf (7 pages, 183333 bytes).
 PDF statistics:
  74 PDF objects out of 1000 (max. 8388607)
  44 compressed objects within 1 object stream

@@ -24,7 +24,11 @@ import queries
 from database import garantir_indices, get_collection
 from models import Evento, Localizacao, Reportante, StatusEvento, TipoEvento, TipoReportante
 
-st.set_page_config(page_title="Eventos Urbanos — Rio de Janeiro", page_icon="🌆", layout="wide")
+st.set_page_config(
+    page_title="Monitoramento de Eventos Urbanos no Rio de Janeiro",
+    page_icon='data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23FFFFFF"><path d="M15 11V5l-3-3-3 3v2H3v14h18V11h-6zm-8 8H5v-2h2v2zm0-4H5v-2h2v2zm0-4H5V9h2v2zm6 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V9h2v2zm0-4h-2V5h2v2zm6 12h-2v-2h2v2zm0-4h-2v-2h2v2z"/></svg>',
+    layout="wide"
+)
 
 # Custom graphite sidebar styling
 st.markdown(
@@ -119,7 +123,7 @@ except PyMongoError as exc:
 # ---------------------------------------------------------------------------
 # Barra lateral / navegação
 # ---------------------------------------------------------------------------
-st.sidebar.title("🌆 Eventos Urbanos — RJ")
+st.sidebar.title(":material/location_city: Monitoramento de Eventos Urbanos no Rio de Janeiro")
 st.sidebar.caption("Trabalho Prático — BD II — IC/UFRJ")
 
 if ERRO_CONEXAO:
@@ -128,9 +132,17 @@ else:
     total_docs = colecao.estimated_document_count()
     st.sidebar.metric("Eventos na base", f"{total_docs:,}".replace(",", "."))
 
+opcoes_navegacao = {
+    "inserir": ":material/add: Inserir Evento",
+    "consultar": ":material/search: Consultar Eventos",
+    "estatisticas": ":material/bar_chart: Estatísticas",
+    "admin": ":material/settings: Administração",
+}
+
 pagina = st.sidebar.radio(
     "Navegação",
-    ["➕ Inserir Evento", "🔎 Consultar Eventos", "📊 Estatísticas", "⚙️ Administração"],
+    options=list(opcoes_navegacao.keys()),
+    format_func=lambda k: opcoes_navegacao[k],
 )
 
 if ERRO_CONEXAO:
@@ -146,14 +158,106 @@ if ERRO_CONEXAO:
 # ---------------------------------------------------------------------------
 # 6.1 — Inserção
 # ---------------------------------------------------------------------------
-if pagina == "➕ Inserir Evento":
+if pagina == "inserir":
     st.header("Cadastrar novo evento urbano")
 
+    # Geocoding Function
+    def geocode_address(address: str) -> tuple[float, float, str] | None:
+        import urllib.request
+        import urllib.parse
+        import json
+        try:
+            query = f"{address}, Rio de Janeiro, Brasil"
+            url_encoded = urllib.parse.quote(query)
+            url = (
+                f"https://nominatim.openstreetmap.org/search"
+                f"?q={url_encoded}&format=json&limit=1&addressdetails=1"
+            )
+            req = urllib.request.Request(url, headers={"User-Agent": "BD2-UFRJ-Urban-Events-App"})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                data = json.loads(response.read().decode())
+                if data:
+                    lat = float(data[0]["lat"])
+                    lon = float(data[0]["lon"])
+                    # Tenta encontrar o bairro nos campos do Nominatim
+                    addr = data[0].get("address", {})
+                    bairro_nominatim = (
+                        addr.get("suburb")
+                        or addr.get("neighbourhood")
+                        or addr.get("city_district")
+                        or addr.get("quarter")
+                        or ""
+                    ).strip()
+
+                    # Tenta correspondência parcial com os bairros conhecidos
+                    bairro_encontrado = None
+                    bairro_lower = bairro_nominatim.lower()
+                    for nome in BAIRROS_COM_CENTROIDE:
+                        if nome.lower() in bairro_lower or bairro_lower in nome.lower():
+                            bairro_encontrado = nome
+                            break
+
+                    # Fallback: bairro mais próximo pelas coordenadas
+                    if not bairro_encontrado:
+                        bairro_encontrado = min(
+                            BAIRROS_COM_CENTROIDE,
+                            key=lambda b: (
+                                (BAIRROS_COM_CENTROIDE[b][0] - lat) ** 2
+                                + (BAIRROS_COM_CENTROIDE[b][1] - lon) ** 2
+                            ),
+                        )
+
+                    return lat, lon, bairro_encontrado
+        except Exception as e:
+            st.error(f"Erro ao buscar coordenadas: {e}")
+        return None
+
+    # Initialize session state for inputs if not present
+    if "lat_inserir" not in st.session_state:
+        st.session_state["lat_inserir"] = -22.9068
+    if "lon_inserir" not in st.session_state:
+        st.session_state["lon_inserir"] = -43.1729
+    if "bairro_inserir" not in st.session_state:
+        st.session_state["bairro_inserir"] = list(BAIRROS_COM_CENTROIDE.keys())[0]
+
+    # Geocoding UI (outside the form to avoid form submission on click)
+    st.text("Inserir endereço")
+    col_addr, col_btn = st.columns([1, 1], vertical_alignment="bottom")
+    with col_addr:
+        endereco = st.text_input("Digite o endereço ou ponto de referência", placeholder="ex: Av. Atlântica, Copacabana", label_visibility="collapsed")
+    with col_btn:
+        buscar_coords = st.button("Buscar Coordenadas", use_container_width=True)
+
+    if buscar_coords and endereco.strip():
+        with st.spinner("Buscando coordenadas..."):
+            resultado = geocode_address(endereco)
+            if resultado:
+                lat_geo, lon_geo, bairro_geo = resultado
+                st.session_state["lat_inserir"] = lat_geo
+                st.session_state["lon_inserir"] = lon_geo
+                st.session_state["bairro_inserir"] = bairro_geo
+                st.success(f"Endereço localizado em **{bairro_geo}** — {lat_geo:.6f}, {lon_geo:.6f}")
+            else:
+                st.error("Endereço não encontrado ou falha na busca.")
+
+    # Bairro selector (outside form — on_change not allowed inside forms)
+    def _on_change_bairro():
+        lat_n, lon_n = BAIRROS_COM_CENTROIDE[st.session_state["bairro_inserir"]]
+        st.session_state["lat_inserir"] = lat_n
+        st.session_state["lon_inserir"] = lon_n
+
+    bairro = st.selectbox(
+        "Bairro",
+        options=list(BAIRROS_COM_CENTROIDE.keys()),
+        key="bairro_inserir",
+        on_change=_on_change_bairro,
+    )
+
+    # Form
     with st.form("form_inserir_evento", clear_on_submit=True):
         col1, col2 = st.columns(2)
         with col1:
             tipo = st.selectbox("Tipo de evento", options=list(TipoEvento), format_func=lambda t: t.value)
-            bairro = st.selectbox("Bairro", options=list(BAIRROS_COM_CENTROIDE.keys()))
             gravidade = st.slider("Gravidade", min_value=1, max_value=5, value=3)
             status = st.selectbox("Status", options=list(StatusEvento), format_func=lambda s: s.value)
         with col2:
@@ -166,18 +270,12 @@ if pagina == "➕ Inserir Evento":
 
         descricao = st.text_area("Descrição", placeholder="Descreva o evento...")
 
-        lat_centro, lon_centro = BAIRROS_COM_CENTROIDE[bairro]
-        st.caption(
-            f"Coordenadas sugeridas para {bairro}: {lat_centro}, {lon_centro} "
-            "(ajuste se souber a localização exata do evento)."
-        )
-        col3, col4 = st.columns(2)
-        with col3:
-            latitude = st.number_input("Latitude", value=lat_centro, format="%.6f")
-        with col4:
-            longitude = st.number_input("Longitude", value=lon_centro, format="%.6f")
-
         enviado = st.form_submit_button("Cadastrar evento", type="primary")
+
+    # Exibe coordenadas que serão usadas (fora do form, leitura do session_state)
+    lat_usar = st.session_state.get("lat_inserir", -22.9068)
+    lon_usar = st.session_state.get("lon_inserir", -43.1729)
+    st.info(f":material/location_on: Coordenadas a serem cadastradas: **{lat_usar:.6f}**, **{lon_usar:.6f}**")
 
     if enviado:
         if not reportante_id.strip():
@@ -194,7 +292,7 @@ if pagina == "➕ Inserir Evento":
                     gravidade=gravidade,
                     status=status,
                     bairro=bairro,
-                    localizacao=Localizacao(latitude=latitude, longitude=longitude),
+                    localizacao=Localizacao(latitude=lat_usar, longitude=lon_usar),
                     reportante=Reportante(tipo=reportante_tipo, identificador=reportante_id.strip()),
                 )
                 id_criado = queries.inserir_evento(colecao, evento)
@@ -206,7 +304,7 @@ if pagina == "➕ Inserir Evento":
 # ---------------------------------------------------------------------------
 # 6.2 / 6.3 / 6.4 / 6.5 — Consultas
 # ---------------------------------------------------------------------------
-elif pagina == "🔎 Consultar Eventos":
+elif pagina == "consultar":
     st.header("Consultar eventos")
 
     aba_tipo, aba_periodo, aba_geo, aba_gravidade = st.tabs(
@@ -302,7 +400,7 @@ elif pagina == "🔎 Consultar Eventos":
 # ---------------------------------------------------------------------------
 # 6.6 — Estatísticas
 # ---------------------------------------------------------------------------
-elif pagina == "📊 Estatísticas":
+elif pagina == "estatisticas":
     st.header("Estatísticas gerais")
 
     col1, col2 = st.columns(2)
@@ -344,7 +442,7 @@ elif pagina == "📊 Estatísticas":
 # ---------------------------------------------------------------------------
 # Administração — útil para demonstrar a Parte Distribuída (Seção 7 / Teste 3)
 # ---------------------------------------------------------------------------
-elif pagina == "⚙️ Administração":
+elif pagina == "admin":
     st.header("Administração do cluster")
 
     st.subheader("Índices ativos na coleção `eventos`")
